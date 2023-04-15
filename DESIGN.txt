@@ -1,0 +1,29 @@
+MACHINE DESIGN, BRIEFLY:
+    - one special stack pointer register
+    - one value stack of size 2^16 quadwords
+    - one type stack of size 2^16 bytes
+        - 0 is int
+        - 1 is string
+
+    - one special table for string literals:
+        - 8 bytes for the number of string literals
+        - subsequently, for each entry:
+            - 8 bytes for the string size without nul byte
+            - The rest of the string
+            - NUL padding to align to 8 bytes
+            - 8 bytes for -1 refcount
+    - instruction section:
+        - 8 bytes for the number of instructions
+        - some multiple of 8 bytes for each subsequent opcode, consisting of:
+            - 6 bytes for the instruction
+            - two 4-bit bitfields counting from LSB:
+                - register argument flags (set iff the argument is in a register)
+                - type flags (set if the argument is a string/empty)
+            - 1 byte for the number of arguments (unsigned)
+            - 8 bytes for each subsequent argument
+    - NOTE: for type tags, 1 represents string/empty; if value is 0 then empty;
+      this means that the string table is one-indexed
+
+    - Dynamically-created strings will be refcounted. The structure is the same as
+      that of string literals, but there will be 8 extra bytes after to hold the
+      refcount. REFCOUNT FOR STRING LITERALS SHOULD BE -1.
