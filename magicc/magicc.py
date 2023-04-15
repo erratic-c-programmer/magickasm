@@ -42,7 +42,9 @@ def compile_rules(rules_s_s: str) -> bytes:
     r_n = 0
     try:
         for r in rules_s:
-            rules.append(parse_to_rule(tokenize(r)))
+            r_parsed = parse_to_rule(tokenize(r))
+            if r_parsed:
+                rules.append(r_parsed)
             r_n += 1
     except LexError as e:
         raise MagiccError(

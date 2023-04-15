@@ -19,7 +19,7 @@ class TokenType(Enum):
     Integer = 5
     String = 6
     Register = 7
-    Arguments = 8
+    Comment = 8
 
 
 Token = tuple[TokenType, str, tuple[int, int]]
@@ -79,6 +79,8 @@ def tokenize(rule: str) -> list[Token]:
                 ctx = TokenType.String
             elif c == "$":
                 ctx = TokenType.Register
+            elif c == "%":
+                ctx = TokenType.Comment
             elif c.isspace():
                 pass
             else:
@@ -171,10 +173,13 @@ def tokenize(rule: str) -> list[Token]:
             else:
                 err_msg = "malformed register"
 
+        elif ctx == TokenType.Comment:
+            pass
+
         else:
             err_msg = "malformed token"
 
-    if ctx is not None:
+    if ctx is not None and ctx != TokenType.Comment:
         raise LexError("incomplete input", (len(rule) - 1, len(rule) - 1))
 
     return cast(list[Token], [tok for tok in toks if tok[0] is not None])

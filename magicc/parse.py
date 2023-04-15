@@ -39,12 +39,12 @@ class ParseError(Exception):
         self.where = where  # which token?
 
 
-def parse_to_rule(toks: list[Token]) -> Rule:
+def parse_to_rule(toks: list[Token]) -> Rule | None:
     """
     Gets information about a lexed rule.
     """
     if len(toks) == 0:
-        raise ParseError(f"missing mnemonic", 0)
+        return  # probably just a comment
 
     labelled = 0
     label = None

@@ -1,4 +1,6 @@
-put #-69000
+% A simple feature test.
+
+put #-69000  % EOL comment
 st #0 #5
 put "Hello!"
 swp #0 #5
