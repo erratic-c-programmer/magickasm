@@ -304,7 +304,7 @@ main(int argc, char **argv)
 		case INSTR_MOD: {
 			arg_int_cast(0);
 			acc_int_cast();
-			accum %= args[0];
+			accum = (int64_t)accum % (int64_t)args[0];
 			break;
 		}
 
@@ -566,14 +566,14 @@ main(int argc, char **argv)
 
 		// Step to next instruction.
 		instr_idx++;
+	}
 
-		// Print accumulator :D
-		printf("ACCUM: ");
-		if (accum_type) {
-			printf("%s\n", (char *)((*(uint64_t **)accum) + 1));
-		} else {
-			printf("%ld\n", (int64_t)accum);
-		}
+	// Print accumulator :D
+	printf("ACCUM: ");
+	if (accum_type) {
+		printf("%s\n", (char *)((*(uint64_t **)accum) + 1));
+	} else {
+		printf("%ld\n", (int64_t)accum);
 	}
 
 	/* CLEANUP */
