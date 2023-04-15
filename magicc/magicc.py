@@ -13,7 +13,7 @@ class MagiccError(Exception):
     """
 
     def __init__(self, msg: str, src: str, where: tuple[int, int]):
-        lineno: int = src[: where[0] + 1].count(chr(10)) + 1
+        lineno: int = src[: where[0]].count(chr(10))
         charno: int = len(src[: where[0] + 1].split("\n")[-1])
         super().__init__(
             f"<input>:{lineno}:{charno} error: {msg}\n"
@@ -29,28 +29,28 @@ class MagiccError(Exception):
 def compile_rules(rules_s_s: str) -> bytes:
     rules_s: list[str] = []
     rules: list[Rule] = []
-    rule_char_map: list[int] = [0]
+    rule_char_map_raw: list[int] = []
+    rule_char_map: list[int] = []
 
     c_n = 0
     for r in rules_s_s.split("\n"):
         c_n += len(r) + 1  # including the newline
-        if r == "":
-            continue
         rules_s.append(r)
-        rule_char_map.append(c_n)
+        rule_char_map_raw.append(c_n)
 
     r_n = 0
     try:
-        for r in rules_s:
+        for i, r in enumerate(rules_s):
             r_parsed = parse_to_rule(tokenize(r))
             if r_parsed:
                 rules.append(r_parsed)
+                rule_char_map.append(rule_char_map_raw[i])
             r_n += 1
     except LexError as e:
         raise MagiccError(
             e.msg,
             rules_s_s,
-            (rule_char_map[r_n] + e.where[0], rule_char_map[r_n] + e.where[1]),
+            (rule_char_map_raw[r_n] + e.where[0], rule_char_map_raw[r_n] + e.where[1]),
         )
     except ParseError as e:
         # If we even get to this stage, that means lexing was successful.
