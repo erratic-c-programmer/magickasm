@@ -11,7 +11,6 @@ dynstr_make(size_t len)
 	uint64_t **s = malloc(sizeof(*s));
 	*s = calloc(1 + len / 8 + 1 + 1, sizeof(**s));
 	*s[0] = len;
-	printf("Creating new string at %p\n", s);
 	return s;
 }
 
@@ -34,7 +33,6 @@ dynstr_decref(uint64_t **s_ptr)
 		return;
 	}
 	if (--s[1 + s[0] / 8 + 1] == 0) {
-		printf("Freeing string at %p\n", s_ptr);
 		free(s);
 		free(s_ptr);
 	}
