@@ -268,41 +268,41 @@ main(int argc, char **argv)
 		case INSTR_ADD: {
 			arg_int_cast(0);
 			acc_int_cast();
-			accum += args[0];
+			accum = (uint64_t)((int64_t)accum + (int64_t)args[0]);
 			break;
 		}
 
 		case INSTR_SUB: {
 			arg_int_cast(0);
 			acc_int_cast();
-			accum -= args[0];
+			accum = (uint64_t)((int64_t)accum - (int64_t)args[0]);
 			break;
 		}
 
 		case INSTR_NEG: {
 			acc_int_cast();
-			accum = -accum;
+			accum = (uint64_t)(-(int64_t)accum);
 			break;
 		}
 
 		case INSTR_MUL: {
 			arg_int_cast(0);
 			acc_int_cast();
-			accum *= args[0];
+			accum = (uint64_t)((int64_t)accum * (int64_t)args[0]);
 			break;
 		}
 
 		case INSTR_DIV: {
 			arg_int_cast(0);
 			acc_int_cast();
-			accum /= args[0];
+			accum = (uint64_t)((int64_t)accum / (int64_t)args[0]);
 			break;
 		}
 
 		case INSTR_MOD: {
 			arg_int_cast(0);
 			acc_int_cast();
-			accum = (int64_t)accum % (int64_t)args[0];
+			accum = (uint64_t)((int64_t)accum % (int64_t)args[0]);
 			break;
 		}
 
