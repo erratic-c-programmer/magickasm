@@ -1,3 +1,3 @@
 #! /bin/sh
-magicc/magicc.py "$1" "$(dirname $1)"/"$(basename $1 '.ma')"
-vmagick/vmagick "$(dirname $1)"/"$(basename $1 '.ma')"
+magicc/magicc.py -o "$(dirname "$1")"/"$(basename "$1" '.ma')" "$1"
+vmagick/vmagick "$(dirname "$1")"/"$(basename "$1" '.ma')"
