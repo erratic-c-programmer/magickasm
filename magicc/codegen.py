@@ -35,7 +35,6 @@ def resolve_labels(rules: list[Rule]) -> list[Rule]:
     for i, r in enumerate(rules):
         labels[r.label] = i + 1
         new_rules.append(copy(r))
-        new_rules[-1].label = None
 
     for i, r in enumerate(new_rules):
         for j, arg in enumerate(r.args):
@@ -186,7 +185,7 @@ def rules2bytes(rules: list[Rule]) -> bytes:
         args: list[bytes] = []
 
         if r.instruction not in InstructionCodes:
-            raise CodegenError("nonexistent instruction", (idx, r.label is not None))
+            raise CodegenError("nonexistent mnemonic", (idx, r.label is not None))
 
         # Handle arguments.
         argregfl: int = 0

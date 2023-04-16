@@ -14,12 +14,12 @@ class MagiccError(Exception):
 
     def __init__(self, msg: str, src: str, where: tuple[int, int]):
         lineno: int = src[: where[0]].count(chr(10))
-        charno: int = len(src[: where[0] + 1].split("\n")[-1])
+        charno: int = len(src[: where[0]].split("\n")[-1])
         super().__init__(
             f"<input>:{lineno}:{charno} error: {msg}\n"
             + f"  {lineno}\t|  {src.split(chr(10))[lineno - 1].strip()}\n"
             + f"\t|  "
-            + " " * (charno - 1)
+            + " " * (charno)
             + "^" * (where[1] - where[0])
             + "\n"
             + f"Compilation failed."
@@ -41,7 +41,7 @@ def compile_rules(rules_s_s: str) -> bytes:
     r_n = 0
     try:
         for i, r in enumerate(rules_s):
-            r_parsed = parse_to_rule(tokenize(r))
+            r_parsed = parse_to_rule(tokenize(r + ' '))
             if r_parsed:
                 rules.append(r_parsed)
                 rule_char_map.append(rule_char_map_raw[i])
