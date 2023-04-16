@@ -135,43 +135,20 @@ def resolve_literals(rules: list[Rule]) -> tuple[list[Rule], bytes]:
 Compiling to bytecode!
 """
 
-# XXX DO NOT CHANGE
-InstructionCodes = {
-    name: code.to_bytes(6, "little")
-    for code, name in enumerate(
-        [
-            "put",
-            "cls",
-            "st",
-            "mst",
-            "ld",
-            "mld",
-            "swp",
-            "add",
-            "sub",
-            "neg",
-            "mul",
-            "div",
-            "mod",
-            "len",
-            "ins",
-            "cat",
-            "sbs",
-            "cmp",
-            "casi",
-            "iasc",
-            "stoi",
-            "itos",
-            "jmp",
-            "jb",
-            "je",
-            "ja",
-            "nop",
-            "type",
-            "run",
-        ]
-    )
-}
+
+# Read all the opcodes.
+Opcodes: dict[str, tuple[bytes, int]] = {}
+OPCODES_FILE = "vmagick/instruction_opcodes.h"
+with open(OPCODES_FILE, "r") as ops_f:
+    ops = ops_f.readlines()
+    for op in ops:
+        if op[0] != "#":
+            continue
+        op = op.split()
+        Opcodes[op[1].split("_")[1].lower()] = (
+            int(op[2]).to_bytes(6, "little"),
+            int(op[4]),
+        )
 
 
 def rules2bytes(rules: list[Rule]) -> bytes:
@@ -184,8 +161,14 @@ def rules2bytes(rules: list[Rule]) -> bytes:
     for idx, r in enumerate(rules):
         args: list[bytes] = []
 
-        if r.instruction not in InstructionCodes:
+        if r.instruction not in Opcodes:
             raise CodegenError("nonexistent mnemonic", (idx, r.label is not None))
+
+        if len(r.args) != Opcodes[r.instruction][1]:
+            raise CodegenError(
+                f"wrong number of arguments (need {Opcodes[r.instruction][1]}, {len(r.args)} given)",
+                (idx, r.label is not None),
+            )
 
         # Handle arguments.
         argregfl: int = 0
@@ -201,7 +184,7 @@ def rules2bytes(rules: list[Rule]) -> bytes:
                     argtypfl |= 1 << j
 
         code.append(
-            InstructionCodes[r.instruction]
+            Opcodes[r.instruction][0]
             + ((argregfl << 4) | argtypfl).to_bytes(1, "little")
             + len(r.args).to_bytes(1, "little")
             + b"".join(args)
