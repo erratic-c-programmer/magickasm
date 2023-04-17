@@ -2,3 +2,4 @@ Session.vim
 vmagick/vmagick
 
 */__pycache__/
+!test/**/*.ma
