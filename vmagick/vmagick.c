@@ -1,48 +1,12 @@
 #include "instruction_opcodes.h"
+#include "stackval.h"
+#include "dynstr.h"
+
 #include <ctype.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-// Tagged objects.
-typedef struct {
-	uint64_t val;
-	char     type;
-} StackVal;
-
-static inline uint64_t **
-dynstr_make(size_t len)
-{
-	uint64_t **s = malloc(sizeof(*s));
-	*s = calloc(1 + len / 8 + 1 + 1, sizeof(**s));
-	*s[0] = len;
-	return s;
-}
-
-static inline void
-dynstr_incref(uint64_t **s_ptr)
-{
-	uint64_t *s = *s_ptr;
-	if ((int64_t)s[1 + s[0] / 8 + 1] == -1) {
-		return;
-	}
-	s[1 + s[0] / 8 + 1]++;
-}
-
-static inline void
-dynstr_decref(uint64_t **s_ptr)
-{
-	// NOTE: will delete the string if refcount drops to zero.
-	uint64_t *s = *s_ptr;
-	if ((int64_t)s[1 + s[0] / 8 + 1] == -1) {
-		return;
-	}
-	if (--s[1 + s[0] / 8 + 1] == 0) {
-		free(s);
-		free(s_ptr);
-	}
-}
 
 int
 main(int argc, char **argv)
@@ -497,7 +461,7 @@ main(int argc, char **argv)
 
 		case INSTR_JB: {
 			arg_int_cast(0);
-			// acc_int_cast modifies the value in the stack[0]ulator. This is
+			// acc_int_cast modifies the value in the accumulator. This is
 			// normally fine as almost all instructions using it end up
 			// casting the value anyway, but the j* instructions cannot do that.
 			stack_incref(0);
