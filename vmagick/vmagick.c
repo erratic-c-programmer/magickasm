@@ -5,6 +5,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Tagged objects.
+typedef struct {
+	uint64_t val;
+	char type;
+} StackVal;
+
 static inline uint64_t **
 dynstr_make(size_t len)
 {
@@ -81,11 +87,9 @@ main(int argc, char **argv)
 
 	// Set stacks up: one value stack and one tag stack.
 	const size_t stack_sz = (1 << 16) - 1;
-	uint64_t    *stack = calloc(stack_sz, sizeof(*stack));
-	char        *stack_types = calloc(stack_sz, sizeof(*stack_types));
+	StackVal    *stack = calloc(stack_sz, sizeof(*stack));
 	// THE ALL-HOLY ACCUMULATOR... is actually just stack[0].
-#define accum      stack[0]
-#define accum_type stack_types[0]
+#define accum stack[0]
 
 	/* FETCH-DECODE-EXECUTE */
 	uint64_t instr_idx = 1; // one-indexed
@@ -105,8 +109,8 @@ main(int argc, char **argv)
 			uint64_t arg_raw = instr_tbl[instr_idx - 1][i + 1];
 			if (reg_flags & (1 << i)) {
 				// Register argument, have to fetch.
-				args[i] = stack[arg_raw];
-				arg_types[i] = stack_types[arg_raw];
+				args[i] = stack[arg_raw].val;
+				arg_types[i] = stack[arg_raw].type;
 			} else if (type_flags & (1 << i)) {
 				// String/empty literal argument.
 				args[i] = (uint64_t)(strlit_tbl + arg_raw);
@@ -121,10 +125,10 @@ main(int argc, char **argv)
 		// Some macros for argument implicit conversion.
 #define acc_int_cast()                         \
 	do {                                       \
-		if (accum_type == 1) {                 \
-			dynstr_decref((uint64_t **)accum); \
-			accum = **(uint64_t **)accum;      \
-			accum_type = 0;                    \
+		if (accum.type == 1) {                 \
+			dynstr_decref((uint64_t **)accum.val); \
+			accum.val = **(uint64_t **)accum.val;      \
+			accum.type = 0;                    \
 		}                                      \
 	} while (0)
 #define arg_int_cast(i)                          \
@@ -137,13 +141,13 @@ main(int argc, char **argv)
 	} while (0)
 #define acc_str_cast()                                                     \
 	do {                                                                   \
-		if (accum_type == 0) {                                             \
-			accum_type = 1;                                                \
-			size_t     len = snprintf(NULL, 0, "%lld", (long long)accum);  \
+		if (accum.type == 0) {                                             \
+			accum.type = 1;                                                \
+			size_t     len = snprintf(NULL, 0, "%lld", (long long)accum.val);  \
 			uint64_t **s = dynstr_make(len);                               \
-			snprintf((char *)(*s + 1), len + 1, "%lld", (long long)accum); \
+			snprintf((char *)(*s + 1), len + 1, "%lld", (long long)accum.val); \
 			dynstr_incref(s);                                              \
-			accum = (uint64_t)s;                                           \
+			accum.val = (uint64_t)s;                                           \
 		}                                                                  \
 	} while (0)
 #define arg_str_cast(i)                                                      \
@@ -161,47 +165,45 @@ main(int argc, char **argv)
 // Some convenience reference-count related macros.
 #define accum_incref()                         \
 	do {                                       \
-		if (accum_type) {                      \
-			dynstr_incref((uint64_t **)accum); \
+		if (accum.type) {                      \
+			dynstr_incref((uint64_t **)accum.val); \
 		}                                      \
 	} while (0)
 #define accum_decref()                         \
 	do {                                       \
-		if (accum_type) {                      \
-			dynstr_decref((uint64_t **)accum); \
+		if (accum.type) {                      \
+			dynstr_decref((uint64_t **)accum.val); \
 		}                                      \
 	} while (0)
 #define stack_incref(i)                           \
 	do {                                          \
-		if (stack_types[i]) {                     \
-			dynstr_incref((uint64_t **)stack[i]); \
+		if (stack[i].type) {                     \
+			dynstr_incref((uint64_t **)stack[i].val); \
 		}                                         \
 	} while (0)
 #define stack_decref(i)                           \
 	do {                                          \
-		if (stack_types[i]) {                     \
-			dynstr_decref((uint64_t **)stack[i]); \
+		if (stack[i].type) {                     \
+			dynstr_decref((uint64_t **)stack[i].val); \
 		}                                         \
 	} while (0)
 #define accum_assign(x, t)                   \
 	do {                                     \
-		uint64_t old = accum;                \
-		char     old_t = accum_type;         \
-		accum = x;                           \
-		accum_type = t;                      \
-		if (old_t) {                         \
-			dynstr_decref((uint64_t **)old); \
+		StackVal old = accum;                \
+		accum.val = x;                           \
+		accum.type = t;                      \
+		if (old.type) {                         \
+			dynstr_decref((uint64_t **)old.val); \
 		}                                    \
 		accum_incref();                      \
 	} while (0)
 #define stack_assign(i, x, t)                \
 	do {                                     \
-		uint64_t old = stack[i];             \
-		char     old_t = stack_types[i];     \
-		stack[i] = x;                        \
-		stack_types[i] = t;                  \
-		if (old_t) {                         \
-			dynstr_decref((uint64_t **)old); \
+		StackVal old = stack[i];             \
+		stack[i].val = x;                        \
+		stack[i].type = t;                  \
+		if (old.type) {                         \
+			dynstr_decref((uint64_t **)old.val); \
 		}                                    \
 		stack_incref(i);                     \
 	} while (0);
@@ -214,7 +216,7 @@ main(int argc, char **argv)
 		}
 
 		case INSTR_CLS: {
-			if (accum_type == 1 && (uint64_t **)accum == strlit_tbl) {
+			if (accum.type == 1 && (uint64_t **)accum.val == strlit_tbl) {
 				accum_assign(args[0], arg_types[0]);
 			}
 			break;
@@ -224,7 +226,7 @@ main(int argc, char **argv)
 			arg_int_cast(0);
 			arg_int_cast(1);
 			uint64_t off = args[0] + args[1];
-			stack_assign(off, accum, accum_type);
+			stack_assign(off, accum.val, accum.type);
 			break;
 		}
 
@@ -232,7 +234,7 @@ main(int argc, char **argv)
 			arg_int_cast(0);
 			arg_int_cast(1);
 			uint64_t off = args[0] + args[1];
-			stack_assign(off, accum, accum_type);
+			stack_assign(off, accum.val, accum.type);
 			accum_assign((uint64_t)strlit_tbl, 1);
 			break;
 		}
@@ -241,7 +243,7 @@ main(int argc, char **argv)
 			arg_int_cast(0);
 			arg_int_cast(1);
 			uint64_t off = args[0] + args[1];
-			accum_assign(stack[off], stack_types[off]);
+			accum_assign(stack[off].val, stack[off].type);
 			break;
 		}
 
@@ -249,7 +251,7 @@ main(int argc, char **argv)
 			arg_int_cast(0);
 			arg_int_cast(1);
 			uint64_t off = args[0] + args[1];
-			accum_assign(stack[off], stack_types[off]);
+			accum_assign(stack[off].val, stack[off].type);
 			stack_assign(off, (uint64_t)strlit_tbl, 1);
 			break;
 		}
@@ -258,57 +260,56 @@ main(int argc, char **argv)
 			arg_int_cast(0);
 			arg_int_cast(1);
 			uint64_t off = args[0] + args[1];
-			uint64_t t = accum;
-			char     t_t = accum_type;
-			accum_assign(stack[off], stack_types[off]);
-			stack_assign(off, t, t_t);
+			StackVal t = accum;
+			accum_assign(stack[off].val, stack[off].type);
+			stack_assign(off, t.val, t.type);
 			break;
 		}
 
 		case INSTR_ADD: {
 			arg_int_cast(0);
 			acc_int_cast();
-			accum = (uint64_t)((int64_t)accum + (int64_t)args[0]);
+			accum.val = (uint64_t)((int64_t)accum.val + (int64_t)args[0]);
 			break;
 		}
 
 		case INSTR_SUB: {
 			arg_int_cast(0);
 			acc_int_cast();
-			accum = (uint64_t)((int64_t)accum - (int64_t)args[0]);
+			accum.val = (uint64_t)((int64_t)accum.val - (int64_t)args[0]);
 			break;
 		}
 
 		case INSTR_NEG: {
 			acc_int_cast();
-			accum = (uint64_t)(-(int64_t)accum);
+			accum.val = (uint64_t)(-(int64_t)accum.val);
 			break;
 		}
 
 		case INSTR_MUL: {
 			arg_int_cast(0);
 			acc_int_cast();
-			accum = (uint64_t)((int64_t)accum * (int64_t)args[0]);
+			accum.val = (uint64_t)((int64_t)accum.val * (int64_t)args[0]);
 			break;
 		}
 
 		case INSTR_DIV: {
 			arg_int_cast(0);
 			acc_int_cast();
-			accum = (uint64_t)((int64_t)accum / (int64_t)args[0]);
+			accum.val = (uint64_t)((int64_t)accum.val / (int64_t)args[0]);
 			break;
 		}
 
 		case INSTR_MOD: {
 			arg_int_cast(0);
 			acc_int_cast();
-			accum = (uint64_t)((int64_t)accum % (int64_t)args[0]);
+			accum.val = (uint64_t)((int64_t)accum.val % (int64_t)args[0]);
 			break;
 		}
 
 		case INSTR_LEN: {
 			acc_str_cast();
-			accum_assign(**(uint64_t **)accum, 0);
+			accum_assign(**(uint64_t **)accum.val, 0);
 			break;
 		}
 
@@ -316,14 +317,14 @@ main(int argc, char **argv)
 			acc_str_cast();
 			arg_int_cast(0);
 			arg_str_cast(1);
-			if ((int64_t)args[0] < 0 || args[0] >= **(uint64_t **)accum) {
+			if ((int64_t)args[0] < 0 || args[0] >= **(uint64_t **)accum.val) {
 				accum_assign((uint64_t)strlit_tbl, 1);
 			} else {
 				size_t arg1_len = **(uint64_t **)args[1];
-				size_t accum_len = **(uint64_t **)accum;
+				size_t accum_len = **(uint64_t **)accum.val;
 
 				uint64_t **s = dynstr_make(accum_len + arg1_len);
-				memcpy(*s + 1, *(uint64_t **)accum + 1, args[0]);
+				memcpy(*s + 1, *(uint64_t **)accum.val + 1, args[0]);
 				memcpy(
 					(char *)(*s + 1) + args[0],
 					*(uint64_t **)(args[1]) + 1,
@@ -331,7 +332,7 @@ main(int argc, char **argv)
 				);
 				memcpy(
 					(char *)(*s + 1) + args[0] + arg1_len,
-					(char *)(*(uint64_t **)accum + 1) + args[0],
+					(char *)(*(uint64_t **)accum.val + 1) + args[0],
 					accum_len - args[0]
 				);
 				accum_assign((uint64_t)s, 1);
@@ -344,10 +345,10 @@ main(int argc, char **argv)
 			arg_str_cast(0);
 
 			size_t arg_len = **(uint64_t **)args[0];
-			size_t accum_len = **(uint64_t **)accum;
+			size_t accum_len = **(uint64_t **)accum.val;
 
 			uint64_t **s = dynstr_make(accum_len + arg_len);
-			memcpy(*s + 1, *(uint64_t **)accum + 1, accum_len);
+			memcpy(*s + 1, *(uint64_t **)accum.val + 1, accum_len);
 			memcpy(
 				(char *)(*s + 1) + accum_len,
 				*(uint64_t **)args[0] + 1,
@@ -363,13 +364,13 @@ main(int argc, char **argv)
 			arg_int_cast(0);
 			arg_int_cast(1);
 
-			size_t accum_len = **(uint64_t **)accum;
+			size_t accum_len = **(uint64_t **)accum.val;
 			args[1] =
 				args[1] < accum_len - args[0] ? args[1] : accum_len - args[0];
 			uint64_t **s = dynstr_make(args[1]);
 			memcpy(
 				*s + 1,
-				(char *)(*(uint64_t **)accum + 1) + args[0],
+				(char *)(*(uint64_t **)accum.val + 1) + args[0],
 				args[1]
 			);
 			accum_assign((uint64_t)s, 1);
@@ -381,11 +382,11 @@ main(int argc, char **argv)
 			acc_str_cast();
 			arg_str_cast(0);
 
-			size_t accum_len = **(uint64_t **)accum;
+			size_t accum_len = **(uint64_t **)accum.val;
 			size_t arg_len = **(uint64_t **)args[0];
 
 			int cmp = memcmp(
-				*(uint64_t **)accum + 1,
+				*(uint64_t **)accum.val + 1,
 				*(uint64_t **)args[0] + 1,
 				arg_len < accum_len ? arg_len : accum_len
 			);
@@ -402,11 +403,11 @@ main(int argc, char **argv)
 			acc_str_cast();
 			arg_int_cast(0);
 
-			size_t accum_len = **(uint64_t **)accum;
+			size_t accum_len = **(uint64_t **)accum.val;
 			if (args[0] < 0 || args[0] >= accum_len) {
 				accum_assign((uint64_t)strlit_tbl, 1);
 			} else {
-				accum_assign(((char *)(*(uint64_t **)accum + 1))[args[0]], 0);
+				accum_assign(((char *)(*(uint64_t **)accum.val + 1))[args[0]], 0);
 			}
 
 			break;
@@ -416,7 +417,7 @@ main(int argc, char **argv)
 			acc_int_cast();
 
 			char **s = (char **)dynstr_make(1);
-			(*s)[sizeof(uint64_t)] = accum % 128;
+			(*s)[sizeof(uint64_t)] = accum.val % 128;
 			accum_assign((uint64_t)s, 1);
 
 			break;
@@ -432,8 +433,8 @@ main(int argc, char **argv)
 			}
 
 			char    digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
-			size_t  acc_len = **(uint64_t **)accum;
-			char   *acc_str = (char *)(*(uint64_t **)accum + 1);
+			size_t  acc_len = **(uint64_t **)accum.val;
+			char   *acc_str = (char *)(*(uint64_t **)accum.val + 1);
 			int64_t num = 0;
 			size_t  i = 0;
 
@@ -477,13 +478,13 @@ main(int argc, char **argv)
 
 			size_t nconv = 0;
 			char   neg = 0;
-			if ((int64_t)accum < 0) {
-				accum = -accum;
+			if ((int64_t)accum.val < 0) {
+				accum.val = -accum.val;
 				neg = 1;
 			}
-			while (accum > 0) {
-				int64_t x = accum % args[0];
-				accum /= args[0];
+			while (accum.val > 0) {
+				int64_t x = accum.val % args[0];
+				accum.val /= args[0];
 				s_s[nconv++] = x >= 0 && x <= 9 ? '0' + x : 'a' + x - 10;
 			}
 			if (neg) {
@@ -514,7 +515,7 @@ main(int argc, char **argv)
 			// normally fine as almost all instructions using it end up
 			// casting the value anyway, but the j* instructions cannot do that.
 			accum_incref();
-			args[1] = accum;
+			args[1] = accum.val;
 			arg_int_cast(1);
 			if (args[1] < 0) {
 				instr_idx = args[0] - 1;
@@ -525,7 +526,7 @@ main(int argc, char **argv)
 		case INSTR_JE: {
 			arg_int_cast(1);
 			accum_incref();
-			args[1] = accum;
+			args[1] = accum.val;
 			arg_int_cast(1);
 			if (args[1] == 0) {
 				instr_idx = args[0] - 1;
@@ -536,7 +537,7 @@ main(int argc, char **argv)
 		case INSTR_JA: {
 			arg_int_cast(1);
 			accum_incref();
-			args[1] = accum;
+			args[1] = accum.val;
 			arg_int_cast(1);
 			if (args[1] > 0) {
 				instr_idx = args[0] - 1;
@@ -568,14 +569,13 @@ main(int argc, char **argv)
 
 	// Print accumulator :D
 	printf("ACCUM: ");
-	if (accum_type) {
-		printf("%s\n", (char *)((*(uint64_t **)accum) + 1));
+	if (accum.type) {
+		printf("%s\n", (char *)((*(uint64_t **)accum.val) + 1));
 	} else {
-		printf("%ld\n", (int64_t)accum);
+		printf("%ld\n", (int64_t)accum.val);
 	}
 
 	/* CLEANUP */
-	free(stack_types);
 	free(stack);
 	free(offset_tbl);
 	free(instr_tbl);
