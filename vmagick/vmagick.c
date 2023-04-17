@@ -38,7 +38,7 @@ main(int argc, char **argv)
 	// Instruction table
 	size_t     instr_tbl_sz = *(load_bptr++);
 	uint64_t  *instr_tbl = load_bptr;
-	load_bptr += instr_tbl_sz * 5;  // 5 qwords per instruction
+	load_bptr += instr_tbl_sz << 2;  // 8 qwords per instruction
 
 	// Set stack up.
 	const size_t stack_sz = (1 << 16) - 1;
@@ -48,7 +48,7 @@ main(int argc, char **argv)
 	uint64_t instr_idx = 1; // one-indexed
 	while (instr_idx - 1 < instr_tbl_sz) {
 		// Fetch the instruction.
-		const uint64_t instr_raw = instr_tbl[5 * (instr_idx - 1)];
+		const uint64_t instr_raw = instr_tbl[(instr_idx - 1) << 2];
 		// Decode it.
 		const uint64_t instr = (instr_raw << 16) >> 16;
 		char           type_flags = (instr_raw >> 48) & 0b1111UL;
@@ -57,8 +57,8 @@ main(int argc, char **argv)
 		// Load the argument into temp arg registers - raw for now.
 		uint64_t args[4];
 		uint64_t arg_types[4];
-		for (int i = 0; i < 4; i++) {
-			uint64_t arg_raw = instr_tbl[5 * (instr_idx - 1) + 1 + i];
+		for (int i = 0; i < 3; i++) {
+			uint64_t arg_raw = instr_tbl[((instr_idx - 1) << 2) + 1 + i];
 			if (reg_flags & (1 << i)) {
 				// Register argument, have to fetch.
 				args[i] = stack[arg_raw].val;
