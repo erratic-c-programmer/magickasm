@@ -155,6 +155,8 @@ main(int argc, char **argv)
 
 		// Execute the corresponding instruction.
 		switch (instr) {
+
+		// General memory primitives.
 		case INSTR_PUT: {
 			stack_assign(0, args[0], arg_types[0]);
 			break;
@@ -211,6 +213,7 @@ main(int argc, char **argv)
 			break;
 		}
 
+		// General numeric primitives.
 		case INSTR_ADD: {
 			arg_int_cast(0);
 			acc_int_cast();
@@ -252,6 +255,21 @@ main(int argc, char **argv)
 			break;
 		}
 
+		case INSTR_SHL: {
+			arg_int_cast(0);
+			acc_int_cast();
+			stack[0].val <<= args[0];
+			break;
+		}
+
+		case INSTR_SHR: {
+			arg_int_cast(0);
+			acc_int_cast();
+			stack[0].val >>= args[0];
+			break;
+		}
+
+		// General string primitives.
 		case INSTR_LEN: {
 			acc_str_cast();
 			stack_assign(0, **(uint64_t **)stack[0].val, 0);
@@ -453,6 +471,7 @@ main(int argc, char **argv)
 			break;
 		}
 
+		// Branching instructions.
 		case INSTR_JMP: {
 			arg_int_cast(0);
 			instr_idx = args[0] - 1;
@@ -495,6 +514,7 @@ main(int argc, char **argv)
 			break;
 		}
 
+		// Misc.
 		case INSTR_NOP: {
 			break;
 		}

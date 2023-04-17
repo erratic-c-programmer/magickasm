@@ -30,3 +30,5 @@
 #define INSTR_NOP	26	// 0
 #define INSTR_TYPE	27	// 0
 #define INSTR_RUN	28	// 1
+#define INSTR_SHL   29  // 1
+#define INSTR_SHR   30  // 1
