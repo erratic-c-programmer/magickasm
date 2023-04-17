@@ -1,10 +1,4 @@
 MACHINE DESIGN, BRIEFLY:
-    - one special stack pointer register
-    - one value stack of size 2^16 quadwords
-    - one type stack of size 2^16 bytes
-        - 0 is int
-        - 1 is string
-
     - one special table for string literals:
         - 8 bytes for the number of string literals
         - subsequently, for each entry:

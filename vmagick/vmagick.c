@@ -85,7 +85,7 @@ main(int argc, char **argv)
 		load_bptr += 1 + nargs;
 	}
 
-	// Set stacks up: one value stack and one tag stack.
+	// Set stack up.
 	const size_t stack_sz = (1 << 16) - 1;
 	StackVal    *stack = calloc(stack_sz, sizeof(*stack));
 
@@ -553,7 +553,7 @@ main(int argc, char **argv)
 		instr_idx++;
 	}
 
-	// Print stack[0]ulator :D
+	// Print accumulator :D
 	printf("ACCUM: ");
 	if (stack[0].type) {
 		printf("%s\n", (char *)((*(uint64_t **)stack[0].val) + 1));
