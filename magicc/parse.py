@@ -41,7 +41,7 @@ class ParseError(Exception):
 
 def parse_to_rule(toks: list[Token]) -> Rule | None:
     """
-    Gets information about a lexed rule.
+    Parses a lexed rule to a Rule data type.
     """
     if len(toks) == 0:
         return  # probably just a comment
@@ -51,6 +51,9 @@ def parse_to_rule(toks: list[Token]) -> Rule | None:
     if toks[0][0] == TokenType.Label:
         label = toks[0][1]
         labelled = 1
+
+    if labelled and len(toks) == 1:
+        toks.append((TokenType.Name, "nop", (0, 0)))
 
     if len(toks) - labelled < 1 or toks[labelled][0] != TokenType.Name:
         raise ParseError("missing mnemonic", labelled)

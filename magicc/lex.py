@@ -87,7 +87,7 @@ def tokenize(rule: str) -> list[Token]:
                 raise LexError("malformed token", (i, i))
 
         elif ctx == TokenType.Label:
-            if c.islower():
+            if c.islower() or c == ':':
                 buf.append(c)
             elif c.isspace():
                 pushtok(i)
