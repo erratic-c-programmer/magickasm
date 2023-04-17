@@ -8,7 +8,7 @@
 // Tagged objects.
 typedef struct {
 	uint64_t val;
-	char type;
+	char     type;
 } StackVal;
 
 static inline uint64_t **
@@ -121,13 +121,13 @@ main(int argc, char **argv)
 		}
 
 		// Some macros for argument implicit conversion.
-#define acc_int_cast()                         \
-	do {                                       \
-		if (stack[0].type == 1) {                 \
-			dynstr_decref((uint64_t **)stack[0].val); \
-			stack[0].val = **(uint64_t **)stack[0].val;      \
-			stack[0].type = 0;                    \
-		}                                      \
+#define acc_int_cast()                                  \
+	do {                                                \
+		if (stack[0].type == 1) {                       \
+			dynstr_decref((uint64_t **)stack[0].val);   \
+			stack[0].val = **(uint64_t **)stack[0].val; \
+			stack[0].type = 0;                          \
+		}                                               \
 	} while (0)
 #define arg_int_cast(i)                          \
 	do {                                         \
@@ -137,16 +137,21 @@ main(int argc, char **argv)
 			arg_types[i] = 0;                    \
 		}                                        \
 	} while (0)
-#define acc_str_cast()                                                     \
-	do {                                                                   \
-		if (stack[0].type == 0) {                                             \
-			stack[0].type = 1;                                                \
-			size_t     len = snprintf(NULL, 0, "%lld", (long long)stack[0].val);  \
-			uint64_t **s = dynstr_make(len);                               \
-			snprintf((char *)(*s + 1), len + 1, "%lld", (long long)stack[0].val); \
-			dynstr_incref(s);                                              \
-			stack[0].val = (uint64_t)s;                                           \
-		}                                                                  \
+#define acc_str_cast()                                                           \
+	do {                                                                         \
+		if (stack[0].type == 0) {                                                \
+			stack[0].type = 1;                                                   \
+			size_t     len = snprintf(NULL, 0, "%lld", (long long)stack[0].val); \
+			uint64_t **s = dynstr_make(len);                                     \
+			snprintf(                                                            \
+				(char *)(*s + 1),                                                \
+				len + 1,                                                         \
+				"%lld",                                                          \
+				(long long)stack[0].val                                          \
+			);                                                                   \
+			dynstr_incref(s);                                                    \
+			stack[0].val = (uint64_t)s;                                          \
+		}                                                                        \
 	} while (0)
 #define arg_str_cast(i)                                                      \
 	do {                                                                     \
@@ -161,27 +166,27 @@ main(int argc, char **argv)
 	} while (0)
 
 // Some convenience reference-count related macros.
-#define stack_incref(i)                           \
-	do {                                          \
-		if (stack[i].type) {                     \
+#define stack_incref(i)                               \
+	do {                                              \
+		if (stack[i].type) {                          \
 			dynstr_incref((uint64_t **)stack[i].val); \
-		}                                         \
+		}                                             \
 	} while (0)
-#define stack_decref(i)                           \
-	do {                                          \
-		if (stack[i].type) {                     \
+#define stack_decref(i)                               \
+	do {                                              \
+		if (stack[i].type) {                          \
 			dynstr_decref((uint64_t **)stack[i].val); \
-		}                                         \
+		}                                             \
 	} while (0)
-#define stack_assign(i, x, t)                \
-	do {                                     \
-		StackVal old = stack[i];             \
+#define stack_assign(i, x, t)                    \
+	do {                                         \
+		StackVal old = stack[i];                 \
 		stack[i].val = x;                        \
-		stack[i].type = t;                  \
-		if (old.type) {                         \
+		stack[i].type = t;                       \
+		if (old.type) {                          \
 			dynstr_decref((uint64_t **)old.val); \
-		}                                    \
-		stack_incref(i);                     \
+		}                                        \
+		stack_incref(i);                         \
 	} while (0);
 
 		// Execute the corresponding instruction.
@@ -293,7 +298,8 @@ main(int argc, char **argv)
 			acc_str_cast();
 			arg_int_cast(0);
 			arg_str_cast(1);
-			if ((int64_t)args[0] < 0 || args[0] >= **(uint64_t **)stack[0].val) {
+			if ((int64_t)args[0] < 0 ||
+			    args[0] >= **(uint64_t **)stack[0].val) {
 				stack_assign(0, (uint64_t)strlit_tbl, 1);
 			} else {
 				size_t arg1_len = **(uint64_t **)args[1];
@@ -383,7 +389,11 @@ main(int argc, char **argv)
 			if (args[0] < 0 || args[0] >= accum_len) {
 				stack_assign(0, (uint64_t)strlit_tbl, 1);
 			} else {
-				stack_assign(0, ((char *)(*(uint64_t **)stack[0].val + 1))[args[0]], 0);
+				stack_assign(
+					0,
+					((char *)(*(uint64_t **)stack[0].val + 1))[args[0]],
+					0
+				);
 			}
 
 			break;
