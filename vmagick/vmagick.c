@@ -1,6 +1,6 @@
+#include "dynstr.h"
 #include "instruction_opcodes.h"
 #include "stackval.h"
-#include "dynstr.h"
 
 #include <ctype.h>
 #include <stdint.h>
