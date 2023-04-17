@@ -3,3 +3,4 @@ vmagick/vmagick
 
 */__pycache__/
 !test/**/*.ma
+!test/*.ma
