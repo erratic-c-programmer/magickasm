@@ -35,19 +35,10 @@ main(int argc, char **argv)
 		load_bptr += 1 + *strlit_tbl[i] / 8 + 1 + 1;
 	}
 
-	// Instruction table; compute offsets as well.
+	// Instruction table
 	size_t     instr_tbl_sz = *(load_bptr++);
-	uint64_t **instr_tbl = malloc(instr_tbl_sz * sizeof(*instr_tbl));
-	// Stores instruction offsets in quadwords from the start of instr_tbl -
-	// last entry is dummy.
-	uint64_t *offset_tbl = malloc((instr_tbl_sz + 1) * sizeof(*offset_tbl));
-	offset_tbl[0] = 0;
-	for (size_t i = 0; i < instr_tbl_sz; i++) {
-		instr_tbl[i] = load_bptr;
-		size_t nargs = ((*instr_tbl[i]) >> 56) & 0xffUL;
-		offset_tbl[i + 1] = offset_tbl[i] + 1 + nargs;
-		load_bptr += 1 + nargs;
-	}
+	uint64_t  *instr_tbl = load_bptr;
+	load_bptr += instr_tbl_sz * 5;  // 5 qwords per instruction
 
 	// Set stack up.
 	const size_t stack_sz = (1 << 16) - 1;
@@ -57,18 +48,17 @@ main(int argc, char **argv)
 	uint64_t instr_idx = 1; // one-indexed
 	while (instr_idx - 1 < instr_tbl_sz) {
 		// Fetch the instruction.
-		const uint64_t instr_raw = *instr_tbl[instr_idx - 1];
+		const uint64_t instr_raw = instr_tbl[5 * (instr_idx - 1)];
 		// Decode it.
 		const uint64_t instr = (instr_raw << 16) >> 16;
 		char           type_flags = (instr_raw >> 48) & 0b1111UL;
 		char           reg_flags = (instr_raw >> 52) & 0b1111UL;
-		size_t         nargs = (instr_raw >> 56) & 0xffUL;
 
 		// Load the argument into temp arg registers - raw for now.
 		uint64_t args[4];
 		uint64_t arg_types[4];
-		for (int i = 0; i < nargs; i++) {
-			uint64_t arg_raw = instr_tbl[instr_idx - 1][i + 1];
+		for (int i = 0; i < 4; i++) {
+			uint64_t arg_raw = instr_tbl[5 * (instr_idx - 1) + 1 + i];
 			if (reg_flags & (1 << i)) {
 				// Register argument, have to fetch.
 				args[i] = stack[arg_raw].val;
@@ -547,8 +537,6 @@ main(int argc, char **argv)
 
 	/* CLEANUP */
 	free(stack);
-	free(offset_tbl);
-	free(instr_tbl);
 	free(strlit_tbl);
 	free(code_raw);
 }

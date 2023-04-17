@@ -183,11 +183,13 @@ def rules2bytes(rules: list[Rule]) -> bytes:
                 elif arg[0] == TokenType.String:
                     argtypfl |= 1 << j
 
+
         code.append(
             Opcodes[r.instruction][0]
             + ((argregfl << 4) | argtypfl).to_bytes(1, "little")
             + len(r.args).to_bytes(1, "little")
             + b"".join(args)
+            + (0).to_bytes(8, "little") * (4 - len(r.args))
         )
 
     return len(code).to_bytes(8, "little") + b"".join(code)

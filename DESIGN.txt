@@ -9,12 +9,14 @@ MACHINE DESIGN, BRIEFLY:
     - instruction section:
         - 8 bytes for the number of instructions
         - some multiple of 8 bytes for each subsequent opcode, consisting of:
-            - 6 bytes for the instruction
+            - 6 bytes for the opcode
             - two 4-bit bitfields counting from LSB:
                 - register argument flags (set iff the argument is in a register)
                 - type flags (set if the argument is a string/empty)
             - 1 byte for the number of arguments (unsigned)
             - 8 bytes for each subsequent argument
+            - padding such that each instruction such that the instructions is
+              exactly 40 bytes
     - NOTE: for type tags, 1 represents string/empty; if value is 0 then empty;
       this means that the string table is one-indexed
 
