@@ -12,7 +12,7 @@ st #0 #7
 
 put #1  % result
 st #0 #1
-put #0  % index
+put $8  % index
 st #0 #2
 
 !exploop nop
@@ -23,10 +23,8 @@ mod $9
 st #0 #1
 
 ld #0 #2
-add #1
+sub #1
 st #0 #2
-ld #0 #8
-sub $2
 ja !exploop
 
 ld #0 #1

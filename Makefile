@@ -6,4 +6,4 @@ test : $(patsubst %.ma,%.mao,$(shell find -name '*\.ma'))
 	magicc/magicc.py -o $@ $<
 
 vmagick/vmagick : vmagick/vmagick.c vmagick/dynstr.c
-	gcc -O3 -Wall -o $@ -g $^
+	gcc -fno-unroll-loops -O3 -Wall -o $@ -g $^
