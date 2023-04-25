@@ -55,8 +55,7 @@ def resolve_labels(rules: list[Rule]) -> list[Rule]:
 def resolve_strlit(rules: list[Rule]) -> tuple[list[Rule], bytes]:
     """
     Resolves strings to string table indices, generating the
-    string literal table as a side effect. Also handles emptys
-    (oops) by just making the strings with index 0.
+    string literal table as a side effect.
     """
 
     strlit_tab: list[bytes] = []
@@ -71,8 +70,6 @@ def resolve_strlit(rules: list[Rule]) -> tuple[list[Rule], bytes]:
                     8, "little", signed=True
                 )
                 new_rules[-1].args[j] = (TokenType.String, len(strlit_tab), (i, argtok))
-            elif arg[0] == TokenType.Empty:
-                new_rules[-1].args[j] = (TokenType.String, 0, (i, argtok))
 
     return (
         new_rules,
@@ -175,7 +172,11 @@ def rules2bytes(rules: list[Rule]) -> bytes:
         argtypfl: int = 0
         for j, arg in enumerate(r.args):
             if arg[0] == TokenType.Integer:
-                args.append(arg[1].to_bytes(8, "little", signed=True))
+                args.append(
+                    arg[1].to_bytes(4, "little", signed=True)
+                    + (0).to_bytes(3, "little")
+                    + (1).to_bytes(1, "little")
+                )
             else:
                 args.append(arg[1].to_bytes(8, "little"))
                 if arg[0] == TokenType.Register:

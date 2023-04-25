@@ -1,7 +1,7 @@
 % Compute x^n mod m
 put #151292348  % base
 st #0 #7
-put #8888888888888888888  % exp
+put #888888888  % exp
 st #0 #8
 put #127382749  % mod
 st #0 #9

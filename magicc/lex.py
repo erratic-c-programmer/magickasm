@@ -13,7 +13,6 @@ class TokenType(Enum):
     """
 
     Rule = 1
-    Empty = 2
     Label = 3
     Name = 4
     Integer = 5
@@ -71,8 +70,6 @@ def tokenize(rule: str) -> list[Token]:
                 # NOTE since this consumes the first character, it should also be part of the buffer.
                 buf.append(c)
                 ctx = TokenType.Name
-            elif c == "/":
-                ctx = TokenType.Empty
             elif c == "#":
                 ctx = TokenType.Integer
             elif c == '"':
@@ -101,12 +98,6 @@ def tokenize(rule: str) -> list[Token]:
                 pushtok(i)
             else:
                 err_msg = "malformed mnemonic"
-
-        elif ctx == TokenType.Empty:
-            if c.isspace():
-                pushtok(i)
-            else:
-                err_msg = "empty symbol not followed by whitespace"
 
         elif ctx == TokenType.Integer:
             if c == "-":

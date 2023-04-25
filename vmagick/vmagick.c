@@ -1,12 +1,15 @@
 #include "dynstr.h"
 #include "instruction_opcodes.h"
-#include "stackval.h"
 
 #include <ctype.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define NOT_INT(x)  (!(x >> 56))
+#define GET_INT(x)  ((int32_t)(x & 0xffffffff))
+#define MAKE_INT(x) ((int32_t)x | (1UL << 56))
 
 int
 main(int argc, char **argv)
@@ -49,9 +52,13 @@ main(int argc, char **argv)
 		load_bptr += 1 + nargs;
 	}
 
-	// Set stack up.
+	// Set stack up and error flag.
 	const size_t stack_sz = (1 << 16) - 1;
-	StackVal    *stack = calloc(stack_sz, sizeof(*stack));
+	uint64_t    *stack = calloc(stack_sz, sizeof(*stack));
+	char         errorflag = 0;
+	for (size_t i = 0; i < stack_sz; i++) {
+		stack[i] = MAKE_INT(0);
+	}
 
 	/* FETCH-DECODE-EXECUTE */
 	uint64_t instr_idx = 1; // one-indexed
@@ -64,93 +71,50 @@ main(int argc, char **argv)
 		char           reg_flags = (instr_raw >> 52) & 0b1111UL;
 		size_t         nargs = (instr_raw >> 56) & 0xffUL;
 
-		// Load the argument into temp arg registers - raw for now.
+		// Load the argument into temp arg registers and do conversions.
 		uint64_t args[4];
 		uint64_t arg_types[4];
 		for (int i = 0; i < nargs; i++) {
 			uint64_t arg_raw = instr_tbl[instr_idx - 1][i + 1];
 			if (reg_flags & (1 << i)) {
 				// Register argument, have to fetch.
-				args[i] = stack[arg_raw].val;
-				arg_types[i] = stack[arg_raw].type;
+				args[i] = stack[arg_raw];
+				arg_types[i] = NOT_INT(args[i]);
+				if (!arg_types[i]) {
+					args[i] = GET_INT(args[i]);
+				}
 			} else if (type_flags & (1 << i)) {
 				// String/empty literal argument.
 				args[i] = (uint64_t)(strlit_tbl + arg_raw);
 				arg_types[i] = 1;
 			} else {
 				// Integer literal argument.
-				args[i] = (int64_t)arg_raw;
+				args[i] = GET_INT(arg_raw);
 				arg_types[i] = 0;
 			}
 		}
 
-		// Some macros for argument implicit conversion.
-#define acc_int_cast()                                  \
-	do {                                                \
-		if (stack[0].type == 1) {                       \
-			dynstr_decref((uint64_t **)stack[0].val);   \
-			stack[0].val = **(uint64_t **)stack[0].val; \
-			stack[0].type = 0;                          \
-		}                                               \
-	} while (0)
-#define arg_int_cast(i)                          \
-	do {                                         \
-		if (arg_types[i] == 1) {                 \
-			dynstr_decref((uint64_t **)args[i]); \
-			args[i] = **(uint64_t **)args[i];    \
-			arg_types[i] = 0;                    \
-		}                                        \
-	} while (0)
-#define acc_str_cast()                                                           \
-	do {                                                                         \
-		if (stack[0].type == 0) {                                                \
-			stack[0].type = 1;                                                   \
-			size_t     len = snprintf(NULL, 0, "%lld", (long long)stack[0].val); \
-			uint64_t **s = dynstr_make(len);                                     \
-			snprintf(                                                            \
-				(char *)(*s + 1),                                                \
-				len + 1,                                                         \
-				"%lld",                                                          \
-				(long long)stack[0].val                                          \
-			);                                                                   \
-			dynstr_incref(s);                                                    \
-			stack[0].val = (uint64_t)s;                                          \
-		}                                                                        \
-	} while (0)
-#define arg_str_cast(i)                                                      \
-	do {                                                                     \
-		if (arg_types[i] == 0) {                                             \
-			arg_types[i] = 1;                                                \
-			size_t     len = snprintf(NULL, 0, "%lld", (long long)args[i]);  \
-			uint64_t **s = dynstr_make(len);                                 \
-			snprintf((char *)(*s + 1), len + 1, "%lld", (long long)args[i]); \
-			dynstr_incref(s);                                                \
-			args[i] = (uint64_t)s;                                           \
-		}                                                                    \
-	} while (0)
-
 // Some convenience reference-count related macros.
-#define stack_incref(i)                               \
-	do {                                              \
-		if (stack[i].type) {                          \
-			dynstr_incref((uint64_t **)stack[i].val); \
-		}                                             \
+#define stack_incref(i)                           \
+	do {                                          \
+		if (NOT_INT(stack[i])) {                  \
+			dynstr_incref((uint64_t **)stack[i]); \
+		}                                         \
 	} while (0)
-#define stack_decref(i)                               \
-	do {                                              \
-		if (stack[i].type) {                          \
-			dynstr_decref((uint64_t **)stack[i].val); \
-		}                                             \
+#define stack_decref(i)                           \
+	do {                                          \
+		if (NOT_INT(stack[i])) {                  \
+			dynstr_decref((uint64_t **)stack[i]); \
+		}                                         \
 	} while (0)
-#define stack_assign(i, x, t)                    \
-	do {                                         \
-		StackVal old = stack[i];                 \
-		stack[i].val = x;                        \
-		stack[i].type = t;                       \
-		if (old.type) {                          \
-			dynstr_decref((uint64_t **)old.val); \
-		}                                        \
-		stack_incref(i);                         \
+#define stack_assign(i, x)                   \
+	do {                                     \
+		uint64_t old = stack[i];             \
+		stack[i] = x;                        \
+		if (NOT_INT(old)) {                  \
+			dynstr_decref((uint64_t **)old); \
+		}                                    \
+		stack_incref(i);                     \
 	} while (0);
 
 		// Execute the corresponding instruction.
@@ -158,137 +122,98 @@ main(int argc, char **argv)
 
 		// General memory primitives.
 		case INSTR_PUT: {
-			stack_assign(0, args[0], arg_types[0]);
-			break;
-		}
-
-		case INSTR_CLS: {
-			if (stack[0].type == 1 && (uint64_t **)stack[0].val == strlit_tbl) {
-				stack_assign(0, args[0], arg_types[0]);
+			if (arg_types[0]) {
+				stack_assign(0, args[0]);
+			} else {
+				stack_assign(0, MAKE_INT(args[0]));
 			}
 			break;
 		}
 
 		case INSTR_ST: {
-			arg_int_cast(0);
-			arg_int_cast(1);
 			uint64_t off = args[0] + args[1];
-			stack_assign(off, stack[0].val, stack[0].type);
-			break;
-		}
-
-		case INSTR_MST: {
-			arg_int_cast(0);
-			arg_int_cast(1);
-			uint64_t off = args[0] + args[1];
-			stack_assign(off, stack[0].val, stack[0].type);
-			stack_assign(0, (uint64_t)strlit_tbl, 1);
+			stack_assign(off, stack[0]);
 			break;
 		}
 
 		case INSTR_LD: {
-			arg_int_cast(0);
-			arg_int_cast(1);
 			uint64_t off = args[0] + args[1];
-			stack_assign(0, stack[off].val, stack[off].type);
-			break;
-		}
-
-		case INSTR_MLD: {
-			arg_int_cast(0);
-			arg_int_cast(1);
-			uint64_t off = args[0] + args[1];
-			stack_assign(0, stack[off].val, stack[off].type);
-			stack_assign(off, (uint64_t)strlit_tbl, 1);
+			stack_assign(0, stack[off]);
 			break;
 		}
 
 		case INSTR_SWP: {
-			arg_int_cast(0);
-			arg_int_cast(1);
 			uint64_t off = args[0] + args[1];
-			StackVal t = stack[0];
-			stack_assign(0, stack[off].val, stack[off].type);
-			stack_assign(off, t.val, t.type);
+			uint64_t t = stack[0];
+			stack_assign(0, stack[off]);
+			stack_assign(off, t);
 			break;
 		}
 
 		// General numeric primitives.
 		case INSTR_ADD: {
-			arg_int_cast(0);
-			acc_int_cast();
-			stack[0].val = (uint64_t)((int64_t)stack[0].val + (int64_t)args[0]);
+			stack[0] = (uint64_t)(GET_INT(stack[0]) + args[0]);
+			stack[0] = MAKE_INT(stack[0]);
 			break;
 		}
 
 		case INSTR_SUB: {
-			arg_int_cast(0);
-			acc_int_cast();
-			stack[0].val = (uint64_t)((int64_t)stack[0].val - (int64_t)args[0]);
+			stack[0] = (uint64_t)(GET_INT(stack[0]) - args[0]);
+			stack[0] = MAKE_INT(stack[0]);
 			break;
 		}
 
 		case INSTR_NEG: {
-			acc_int_cast();
-			stack[0].val = (uint64_t)(-(int64_t)stack[0].val);
+			stack[0] = (uint64_t)(-GET_INT(stack[0]));
+			stack[0] = MAKE_INT(stack[0]);
 			break;
 		}
 
 		case INSTR_MUL: {
-			arg_int_cast(0);
-			acc_int_cast();
-			stack[0].val = (uint64_t)((int64_t)stack[0].val * (int64_t)args[0]);
+			stack[0] = (uint64_t)(GET_INT(stack[0]) * args[0]);
+			stack[0] = MAKE_INT(stack[0]);
 			break;
 		}
 
 		case INSTR_DIV: {
-			arg_int_cast(0);
-			acc_int_cast();
-			stack[0].val = (uint64_t)((int64_t)stack[0].val / (int64_t)args[0]);
+			stack[0] = (uint64_t)(GET_INT(stack[0]) / args[0]);
+			stack[0] = MAKE_INT(stack[0]);
 			break;
 		}
 
 		case INSTR_MOD: {
-			arg_int_cast(0);
-			acc_int_cast();
-			stack[0].val = (uint64_t)((int64_t)stack[0].val % (int64_t)args[0]);
+			stack[0] = (uint64_t)(GET_INT(stack[0]) % args[0]);
+			stack[0] = MAKE_INT(stack[0]);
 			break;
 		}
 
 		case INSTR_SHL: {
-			arg_int_cast(0);
-			acc_int_cast();
-			stack[0].val <<= args[0];
+			stack[0] = GET_INT(stack[0]) << args[0];
+			stack[0] = MAKE_INT(stack[0]);
 			break;
 		}
 
 		case INSTR_SHR: {
-			arg_int_cast(0);
-			acc_int_cast();
-			stack[0].val >>= args[0];
+			stack[0] = GET_INT(stack[0]) >> args[0];
+			stack[0] = MAKE_INT(stack[0]);
 			break;
 		}
 
 		// General string primitives.
 		case INSTR_LEN: {
-			acc_str_cast();
-			stack_assign(0, **(uint64_t **)stack[0].val, 0);
+			stack_assign(0, MAKE_INT(**(uint64_t **)stack[0]));
 			break;
 		}
 
 		case INSTR_INS: {
-			acc_str_cast();
-			arg_int_cast(0);
-			arg_str_cast(1);
-			if ((int64_t)args[0] < 0 ||
-			    args[0] >= **(uint64_t **)stack[0].val) {
-				stack_assign(0, (uint64_t)strlit_tbl, 1);
+			if (args[0] < 0 || args[0] >= **(uint64_t **)stack[0]) {
+				errorflag = 1;
 			} else {
 				size_t arg1_len = **(uint64_t **)args[1];
-				size_t accum_len = **(uint64_t **)stack[0].val;
+				size_t accum_len = **(uint64_t **)stack[0];
 
 				uint64_t **s = dynstr_make(accum_len + arg1_len);
-				memcpy(*s + 1, *(uint64_t **)stack[0].val + 1, args[0]);
+				memcpy(*s + 1, *(uint64_t **)stack[0] + 1, args[0]);
 				memcpy(
 					(char *)(*s + 1) + args[0],
 					*(uint64_t **)(args[1]) + 1,
@@ -296,113 +221,96 @@ main(int argc, char **argv)
 				);
 				memcpy(
 					(char *)(*s + 1) + args[0] + arg1_len,
-					(char *)(*(uint64_t **)stack[0].val + 1) + args[0],
+					(char *)(*(uint64_t **)stack[0] + 1) + args[0],
 					accum_len - args[0]
 				);
-				stack_assign(0, (uint64_t)s, 1);
+				stack_assign(0, (uint64_t)s);
 			}
 			break;
 		}
 
 		case INSTR_CAT: {
-			acc_str_cast();
-			arg_str_cast(0);
-
 			size_t arg_len = **(uint64_t **)args[0];
-			size_t accum_len = **(uint64_t **)stack[0].val;
+			size_t accum_len = **(uint64_t **)stack[0];
 
 			uint64_t **s = dynstr_make(accum_len + arg_len);
-			memcpy(*s + 1, *(uint64_t **)stack[0].val + 1, accum_len);
+			memcpy(*s + 1, *(uint64_t **)stack[0] + 1, accum_len);
 			memcpy(
 				(char *)(*s + 1) + accum_len,
 				*(uint64_t **)args[0] + 1,
 				arg_len
 			);
-			stack_assign(0, (uint64_t)s, 1);
+			stack_assign(0, (uint64_t)s);
 
 			break;
 		}
 
 		case INSTR_SBS: {
-			acc_str_cast();
-			arg_int_cast(0);
-			arg_int_cast(1);
-
-			size_t accum_len = **(uint64_t **)stack[0].val;
+			size_t accum_len = **(uint64_t **)stack[0];
 			args[1] =
 				args[1] < accum_len - args[0] ? args[1] : accum_len - args[0];
 			uint64_t **s = dynstr_make(args[1]);
 			memcpy(
 				*s + 1,
-				(char *)(*(uint64_t **)stack[0].val + 1) + args[0],
+				(char *)(*(uint64_t **)stack[0] + 1) + args[0],
 				args[1]
 			);
-			stack_assign(0, (uint64_t)s, 1);
+			stack_assign(0, (uint64_t)s);
 
 			break;
 		}
 
 		case INSTR_CMP: {
-			acc_str_cast();
-			arg_str_cast(0);
-
-			size_t accum_len = **(uint64_t **)stack[0].val;
+			size_t accum_len = **(uint64_t **)stack[0];
 			size_t arg_len = **(uint64_t **)args[0];
 
 			int cmp = memcmp(
-				*(uint64_t **)stack[0].val + 1,
+				*(uint64_t **)stack[0] + 1,
 				*(uint64_t **)args[0] + 1,
 				arg_len < accum_len ? arg_len : accum_len
 			);
 			if (cmp || accum_len == arg_len) {
-				stack_assign(0, cmp, 0);
+				stack_assign(0, cmp);
 			} else {
-				stack_assign(0, accum_len < arg_len ? -1 : 1, 0);
+				stack_assign(0, accum_len < arg_len ? -1 : 1);
 			}
+			stack[0] = MAKE_INT(stack[0]);
 
 			break;
 		}
 
 		case INSTR_CASI: {
-			acc_str_cast();
-			arg_int_cast(0);
-
-			size_t accum_len = **(uint64_t **)stack[0].val;
+			size_t accum_len = **(uint64_t **)stack[0];
 			if (args[0] < 0 || args[0] >= accum_len) {
-				stack_assign(0, (uint64_t)strlit_tbl, 1);
+				errorflag = 1;
 			} else {
 				stack_assign(
 					0,
-					((char *)(*(uint64_t **)stack[0].val + 1))[args[0]],
-					0
+					((char *)(*(uint64_t **)stack[0] + 1))[args[0]]
 				);
+				stack[0] = MAKE_INT(stack[0]);
 			}
 
 			break;
 		}
 
 		case INSTR_IASC: {
-			acc_int_cast();
-
 			char **s = (char **)dynstr_make(1);
-			(*s)[sizeof(uint64_t)] = stack[0].val % 128;
-			stack_assign(0, (uint64_t)s, 1);
+			(*s)[sizeof(uint64_t)] = stack[0] % 128;
+			stack_assign(0, (uint64_t)s);
 
 			break;
 		}
 
 		case INSTR_STOI: {
-			acc_str_cast();
-			arg_int_cast(0);
-
 			if (args[0] < 2 || args[0] > 36) {
-				stack_assign(0, (uint64_t)strlit_tbl, 1);
+				errorflag = 1;
 				break;
 			}
 
 			char    digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
-			size_t  acc_len = **(uint64_t **)stack[0].val;
-			char   *acc_str = (char *)(*(uint64_t **)stack[0].val + 1);
+			size_t  acc_len = **(uint64_t **)stack[0];
+			char   *acc_str = (char *)(*(uint64_t **)stack[0] + 1);
 			int64_t num = 0;
 			size_t  i = 0;
 
@@ -423,20 +331,18 @@ main(int argc, char **argv)
 			}
 
 			if (i == 0) {
-				stack_assign(0, (uint64_t)strlit_tbl, 1);
+				errorflag = 1;
 			} else {
-				stack_assign(0, num / (int64_t)args[0], 0);
+				stack_assign(0, num / args[0]);
+				stack[0] = MAKE_INT(stack[0]);
 			}
 
 			break;
 		}
 
 		case INSTR_ITOS: {
-			acc_int_cast();
-			arg_int_cast(0);
-
 			if (args[0] < 2 || args[0] > 36) {
-				stack_assign(0, (uint64_t)strlit_tbl, 1);
+				errorflag = 1;
 				break;
 			}
 
@@ -445,14 +351,15 @@ main(int argc, char **argv)
 			char      *s_s = (char *)(*(uint64_t **)s + 1);
 
 			size_t nconv = 0;
+			stack[0] = GET_INT(stack[0]);
 			char   neg = 0;
-			if ((int64_t)stack[0].val < 0) {
-				stack[0].val = -stack[0].val;
+			if (stack[0] < 0) {
+				stack[0] = -stack[0];
 				neg = 1;
 			}
-			while (stack[0].val > 0) {
-				int64_t x = stack[0].val % args[0];
-				stack[0].val /= args[0];
+			while (stack[0] > 0) {
+				int32_t x = stack[0] % args[0];
+				stack[0] /= args[0];
 				s_s[nconv++] = x >= 0 && x <= 9 ? '0' + x : 'a' + x - 10;
 			}
 			if (neg) {
@@ -466,49 +373,33 @@ main(int argc, char **argv)
 			}
 			// Fix the string length.
 			**s = (uint64_t)nconv;
-			stack_assign(0, (uint64_t)s, 1);
+			stack_assign(0, (uint64_t)s);
 
 			break;
 		}
 
 		// Branching instructions.
 		case INSTR_JMP: {
-			arg_int_cast(0);
 			instr_idx = args[0] - 1;
 			break;
 		}
 
 		case INSTR_JB: {
-			arg_int_cast(0);
-			// acc_int_cast modifies the value in the accumulator. This is
-			// normally fine as almost all instructions using it end up
-			// casting the value anyway, but the j* instructions cannot do that.
-			stack_incref(0);
-			args[1] = stack[0].val;
-			arg_int_cast(1);
-			if (args[1] < 0) {
+			if (GET_INT(stack[0]) < 0) {
 				instr_idx = args[0] - 1;
 			}
 			break;
 		}
 
 		case INSTR_JE: {
-			arg_int_cast(1);
-			stack_incref(0);
-			args[1] = stack[0].val;
-			arg_int_cast(1);
-			if (args[1] == 0) {
+			if (GET_INT(args[1]) == 0) {
 				instr_idx = args[0] - 1;
 			}
 			break;
 		}
 
 		case INSTR_JA: {
-			arg_int_cast(1);
-			stack_incref(0);
-			args[1] = stack[0].val;
-			arg_int_cast(1);
-			if (args[1] > 0) {
+			if (GET_INT(stack[0]) > 0) {
 				instr_idx = args[0] - 1;
 			}
 			break;
@@ -517,14 +408,6 @@ main(int argc, char **argv)
 		// Misc.
 		case INSTR_NOP: {
 			break;
-		}
-
-		case INSTR_TYPE: {
-			if (arg_types[0] && (uint64_t **)args[0] == strlit_tbl) {
-				stack_assign(0, -1, 0);
-			} else {
-				stack_assign(0, arg_types[0], 0);
-			}
 		}
 
 		default: {
@@ -539,10 +422,10 @@ main(int argc, char **argv)
 
 	// Print accumulator :D
 	printf("ACCUM: ");
-	if (stack[0].type) {
-		printf("%s\n", (char *)((*(uint64_t **)stack[0].val) + 1));
+	if (NOT_INT(stack[0])) {
+		printf("%s\n", (char *)((*(uint64_t **)stack[0]) + 1));
 	} else {
-		printf("%ld\n", (int64_t)stack[0].val);
+		printf("%d\n", GET_INT(stack[0]));
 	}
 
 	/* CLEANUP */

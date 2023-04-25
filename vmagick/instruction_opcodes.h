@@ -2,11 +2,8 @@
 // Format: #define INSTR_<NAME> NUMBER // NARGS
 // Must be strictly be followed because the assembler parses this.
 #define INSTR_PUT	0	// 1
-#define INSTR_CLS	1	// 1
 #define INSTR_ST	2	// 2
-#define INSTR_MST	3	// 2
 #define INSTR_LD	4	// 2
-#define INSTR_MLD	5	// 2
 #define INSTR_SWP	6	// 2
 #define INSTR_ADD	7	// 1
 #define INSTR_SUB	8	// 1
@@ -28,7 +25,8 @@
 #define INSTR_JE	24	// 1
 #define INSTR_JA	25	// 1
 #define INSTR_NOP	26	// 0
-#define INSTR_TYPE	27	// 0
 #define INSTR_RUN	28	// 1
 #define INSTR_SHL   29  // 1
 #define INSTR_SHR   30  // 1
+#define INSTR_GETE  31  // 0
+#define INSTR_SETE  32  // 0

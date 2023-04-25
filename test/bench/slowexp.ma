@@ -1,9 +1,9 @@
 % Compute x^n mod m, naively
-put #93242345001  % base
+put #932  % base
 st #0 #7
 put #5240582  % exp
 st #0 #8
-put #127382749  % mod
+put #1273823  % mod
 st #0 #9
 
 ld #0 #7
