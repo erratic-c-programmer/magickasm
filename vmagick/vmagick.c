@@ -150,6 +150,20 @@ main(int argc, char **argv)
 			break;
 		}
 
+		case INSTR_GETE: {
+			stack_assign(0, MAKE_INT(errorflag));
+			break;
+		}
+
+		case INSTR_SETE: {
+			if (NOT_INT(stack[0]) || GET_INT(stack[0])) {
+				errorflag = 1;
+			} else {
+				errorflag = 0;
+			}
+			break;
+		}
+
 		// General numeric primitives.
 		case INSTR_ADD: {
 			stack[0] = (uint64_t)(GET_INT(stack[0]) + args[0]);
