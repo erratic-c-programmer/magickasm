@@ -27,21 +27,18 @@ char errorflag = 0;
 			dynstr_decref((uint64_t **)stack[i]); \
 		}                                         \
 	} while (0)
-#define stack_assign(i, x)                   \
-	do {                                     \
-		uint64_t old = stack[i];             \
-		stack[i] = x;                        \
-		if (NOT_INT(old)) {                  \
-			dynstr_decref((uint64_t **)old); \
-		}                                    \
-		stack_incref(i);                     \
+#define stack_assign(i, x) \
+	do {                   \
+		stack_decref(i);   \
+		stack[i] = x;      \
+		stack_incref(i);   \
 	} while (0);
 
 #define INSTR_IMPL(instr)          \
 	uint64_t instr_##instr##_impl( \
-		char     arg_types[],      \
+		uint64_t arg_types[],      \
 		uint64_t args[],           \
-		uint64_t accum            \
+		uint64_t accum             \
 	)
 
 // Actual instruction implementations.
@@ -118,7 +115,7 @@ inline INSTR_IMPL(LEN)
 	return MAKE_INT(**(uint64_t **)accum);
 }
 
-INSTR_IMPL(INS)
+__attribute__((noinline)) INSTR_IMPL(INS)
 {
 	if (args[0] < 0 || args[0] >= **(uint64_t **)accum) {
 		errorflag = 1;
@@ -143,36 +140,27 @@ INSTR_IMPL(INS)
 	}
 }
 
-INSTR_IMPL(CAT)
+__attribute__((noinline)) INSTR_IMPL(CAT)
 {
 	size_t arg_len = **(uint64_t **)args[0];
 	size_t accum_len = **(uint64_t **)accum;
 
 	uint64_t **s = dynstr_make(accum_len + arg_len);
 	memcpy(*s + 1, *(uint64_t **)accum + 1, accum_len);
-	memcpy(
-		(char *)(*s + 1) + accum_len,
-		*(uint64_t **)args[0] + 1,
-		arg_len
-	);
+	memcpy((char *)(*s + 1) + accum_len, *(uint64_t **)args[0] + 1, arg_len);
 	return (uint64_t)s;
 }
 
-INSTR_IMPL(SBS)
+__attribute__((noinline)) INSTR_IMPL(SBS)
 {
 	size_t accum_len = **(uint64_t **)accum;
-	args[1] = args[1] < accum_len - args[0] ? args[1]
-											: accum_len - args[0];
+	args[1] = args[1] < accum_len - args[0] ? args[1] : accum_len - args[0];
 	uint64_t **s = dynstr_make(args[1]);
-	memcpy(
-		*s + 1,
-		(char *)(*(uint64_t **)accum + 1) + args[0],
-		args[1]
-	);
+	memcpy(*s + 1, (char *)(*(uint64_t **)accum + 1) + args[0], args[1]);
 	return (uint64_t)s;
 }
 
-INSTR_IMPL(CMP)
+__attribute__((noinline)) INSTR_IMPL(CMP)
 {
 	size_t accum_len = **(uint64_t **)accum;
 	size_t arg_len = **(uint64_t **)args[0];
@@ -196,9 +184,7 @@ INSTR_IMPL(CASI)
 		errorflag = 1;
 		return accum;
 	} else {
-		return MAKE_INT(
-			((char *)(*(uint64_t **)accum + 1))[args[0]]
-		);
+		return MAKE_INT(((char *)(*(uint64_t **)accum + 1))[args[0]]);
 	}
 }
 
@@ -209,7 +195,7 @@ inline INSTR_IMPL(IASC)
 	return (uint64_t)s;
 }
 
-INSTR_IMPL(STOI)
+__attribute__((noinline)) INSTR_IMPL(STOI)
 {
 	if (args[0] < 2 || args[0] > 36) {
 		errorflag = 1;
@@ -226,12 +212,11 @@ INSTR_IMPL(STOI)
 		i++;
 	}
 	for (; i < acc_len; i++) {
-		if (tolower(acc_str[i]) > digits[args[0] - 1] ||
-			!isalnum(acc_str[i])) {
+		if (tolower(acc_str[i]) > digits[args[0] - 1] || !isalnum(acc_str[i])) {
 			break;
 		}
 		num += isdigit(acc_str[i]) ? acc_str[i] - '0'
-								   : 10 + tolower(acc_str[i]) - 'a';
+		                           : 10 + tolower(acc_str[i]) - 'a';
 		num *= args[0];
 	}
 	if (acc_str[0] == '-') {
@@ -244,6 +229,43 @@ INSTR_IMPL(STOI)
 	} else {
 		return MAKE_INT(num / args[0]);
 	}
+}
+
+__attribute__((noinline)) INSTR_IMPL(ITOS)
+{
+	if (args[0] < 2 || args[0] > 36) {
+		errorflag = 1;
+		return accum;
+	}
+
+	uint64_t **s =
+		dynstr_make(65); // absolute maximum possible - will adjust later
+	char *s_s = (char *)(*(uint64_t **)s + 1);
+
+	size_t nconv = 0;
+	accum = GET_INT(accum);
+	char neg = 0;
+	if (accum < 0) {
+		accum = -accum;
+		neg = 1;
+	}
+	while (accum > 0) {
+		int32_t x = accum % args[0];
+		accum /= args[0];
+		s_s[nconv++] = x >= 0 && x <= 9 ? '0' + x : 'a' + x - 10;
+	}
+	if (neg) {
+		s_s[nconv++] = '-';
+	}
+	// Reverse the string.
+	for (size_t i = 0; i < nconv / 2; i++) {
+		char t = s_s[i];
+		s_s[i] = s_s[nconv - i - 1];
+		s_s[nconv - i - 1] = t;
+	}
+	// Fix the string length.
+	**s = (uint64_t)nconv;
+	return (uint64_t)s;
 }
 
 int
@@ -265,17 +287,17 @@ main(int argc, char **argv)
 	// Load all structures into arrays.
 
 	// String literal table.
-	size_t strlit_tbl_sz = load_bptr[0];
+	const size_t strlit_tbl_sz = load_bptr[0];
 	load_bptr++;
-	uint64_t **strlit_tbl = malloc(strlit_tbl_sz * sizeof(*strlit_tbl));
+	const uint64_t **strlit_tbl = malloc(strlit_tbl_sz * sizeof(*strlit_tbl));
 	for (size_t i = 0; i < strlit_tbl_sz; i++) {
 		strlit_tbl[i] = load_bptr;
 		load_bptr += 1 + *strlit_tbl[i] / 8 + 1 + 1;
 	}
 
 	// Instruction table; compute offsets as well.
-	size_t     instr_tbl_sz = *(load_bptr++);
-	uint64_t **instr_tbl = malloc(instr_tbl_sz * sizeof(*instr_tbl));
+	const size_t     instr_tbl_sz = *(load_bptr++);
+	const uint64_t **instr_tbl = malloc(instr_tbl_sz * sizeof(*instr_tbl));
 	// Stores instruction offsets in quadwords from the start of instr_tbl -
 	// last entry is dummy.
 	uint64_t *offset_tbl = malloc((instr_tbl_sz + 1) * sizeof(*offset_tbl));
@@ -301,13 +323,13 @@ main(int argc, char **argv)
 		const uint64_t instr_raw = *instr_tbl[instr_idx - 1];
 		// Decode it.
 		const uint64_t instr = (instr_raw << 16) >> 16;
-		char           type_flags = (instr_raw >> 48) & 0b1111UL;
-		char           reg_flags = (instr_raw >> 52) & 0b1111UL;
-		size_t         nargs = (instr_raw >> 56) & 0xffUL;
+		const char           type_flags = (instr_raw >> 48) & 0b1111UL;
+		const char           reg_flags = (instr_raw >> 52) & 0b1111UL;
+		const size_t         nargs = (instr_raw >> 56) & 0xffUL;
 
 		// Load the argument into temp arg registers and do conversions.
 		uint64_t args[4];
-		char     arg_types[4];
+		uint64_t     arg_types[4];
 		for (int i = 0; i < nargs; i++) {
 			uint64_t arg_raw = instr_tbl[instr_idx - 1][i + 1];
 			if (reg_flags & (1 << i)) {
@@ -328,135 +350,98 @@ main(int argc, char **argv)
 			}
 		}
 
-		// Execute the corresponding instruction.
-		switch (instr) {
-
 #define CASE_INSTR(instr)                                                 \
 	case INSTR_##instr: {                                                 \
 		stack_assign(0, instr_##instr##_impl(arg_types, args, stack[0])); \
 		break;                                                            \
 	}
 
+		// Execute the corresponding instruction.
+		switch (instr) {
+
 			// General memory primitives.
 			CASE_INSTR(PUT);
 
-			case INSTR_ST: {
-				uint64_t off = args[0] + args[1];
-				stack_assign(off, stack[0]);
-				break;
-			}
+		case INSTR_ST: {
+			uint64_t off = args[0] + args[1];
+			stack_assign(off, stack[0]);
+			break;
+		}
 
-			case INSTR_LD: {
-				uint64_t off = args[0] + args[1];
-				stack_assign(0, stack[off]);
-				break;
-			}
+		case INSTR_LD: {
+			uint64_t off = args[0] + args[1];
+			stack_assign(0, stack[off]);
+			break;
+		}
 
-			case INSTR_SWP: {
-				uint64_t off = args[0] + args[1];
-				uint64_t t = stack[0];
-				stack_assign(0, stack[off]);
-				stack_assign(off, t);
-				break;
-			}
+		case INSTR_SWP: {
+			uint64_t off = args[0] + args[1];
+			uint64_t t = stack[0];
+			stack_assign(0, stack[off]);
+			stack_assign(off, t);
+			break;
+		}
 
-				CASE_INSTR(GETE);
+			CASE_INSTR(GETE);
 
-				CASE_INSTR(SETE);
+			CASE_INSTR(SETE);
 
-				// General numeric primitives.
-				CASE_INSTR(ADD);
-				CASE_INSTR(SUB);
-				CASE_INSTR(NEG);
-				CASE_INSTR(MUL);
-				CASE_INSTR(MOD);
-				CASE_INSTR(SHL);
-				CASE_INSTR(SHR);
+			// General numeric primitives.
+			CASE_INSTR(ADD);
+			CASE_INSTR(SUB);
+			CASE_INSTR(NEG);
+			CASE_INSTR(MUL);
+			CASE_INSTR(MOD);
+			CASE_INSTR(SHL);
+			CASE_INSTR(SHR);
 
-				// General string primitives.
-				CASE_INSTR(LEN);
-				CASE_INSTR(INS);
-				CASE_INSTR(CAT);
-				CASE_INSTR(SBS);
-				CASE_INSTR(CMP);
-				CASE_INSTR(CASI);
-				CASE_INSTR(IASC);
-				CASE_INSTR(STOI);
+			// General string primitives.
+			CASE_INSTR(LEN);
+			CASE_INSTR(INS);
+			CASE_INSTR(CAT);
+			CASE_INSTR(SBS);
+			CASE_INSTR(CMP);
+			CASE_INSTR(CASI);
+			CASE_INSTR(IASC);
+			CASE_INSTR(STOI);
+			CASE_INSTR(ITOS);
 
-			case INSTR_ITOS: {
-				if (args[0] < 2 || args[0] > 36) {
-					errorflag = 1;
-					break;
-				}
+		// Branching instructions.
+		case INSTR_JMP: {
+			instr_idx = args[0] - 1;
+			break;
+		}
 
-				uint64_t **s = dynstr_make(65
-				); // absolute maximum possible - will adjust later
-				char      *s_s = (char *)(*(uint64_t **)s + 1);
-
-				size_t nconv = 0;
-				stack[0] = GET_INT(stack[0]);
-				char neg = 0;
-				if (stack[0] < 0) {
-					stack[0] = -stack[0];
-					neg = 1;
-				}
-				while (stack[0] > 0) {
-					int32_t x = stack[0] % args[0];
-					stack[0] /= args[0];
-					s_s[nconv++] = x >= 0 && x <= 9 ? '0' + x : 'a' + x - 10;
-				}
-				if (neg) {
-					s_s[nconv++] = '-';
-				}
-				// Reverse the string.
-				for (size_t i = 0; i < nconv / 2; i++) {
-					char t = s_s[i];
-					s_s[i] = s_s[nconv - i - 1];
-					s_s[nconv - i - 1] = t;
-				}
-				// Fix the string length.
-				**s = (uint64_t)nconv;
-				stack_assign(0, (uint64_t)s);
-
-				break;
-			}
-
-			// Branching instructions.
-			case INSTR_JMP: {
+		case INSTR_JB: {
+			if (GET_INT(stack[0]) < 0) {
 				instr_idx = args[0] - 1;
-				break;
 			}
+			break;
+		}
 
-			case INSTR_JB: {
-				if (GET_INT(stack[0]) < 0) {
-					instr_idx = args[0] - 1;
-				}
-				break;
+		case INSTR_JE: {
+			if (GET_INT(args[1]) == 0) {
+				instr_idx = args[0] - 1;
 			}
+			break;
+		}
 
-			case INSTR_JE: {
-				if (GET_INT(args[1]) == 0) {
-					instr_idx = args[0] - 1;
-				}
-				break;
+		case INSTR_JA: {
+			if (GET_INT(stack[0]) > 0) {
+				instr_idx = args[0] - 1;
 			}
+			break;
+		}
 
-			case INSTR_JA: {
-				if (GET_INT(stack[0]) > 0) {
-					instr_idx = args[0] - 1;
-				}
-				break;
-			}
+		// Misc.
+		case INSTR_NOP: {
+			break;
+		}
 
-			// Misc.
-			case INSTR_NOP: {
-				break;
-			}
-
-			default: {
-				// Unimplemented?? Bad instruction???
-				break;
-			}
+		default: {
+			// Unimplemented?? Bad instruction???
+			break;
+		}
 		}
 
 		// Step to next instruction.
