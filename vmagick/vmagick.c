@@ -323,13 +323,13 @@ main(int argc, char **argv)
 		const uint64_t instr_raw = *instr_tbl[instr_idx - 1];
 		// Decode it.
 		const uint64_t instr = (instr_raw << 16) >> 16;
-		const char           type_flags = (instr_raw >> 48) & 0b1111UL;
-		const char           reg_flags = (instr_raw >> 52) & 0b1111UL;
-		const size_t         nargs = (instr_raw >> 56) & 0xffUL;
+		const char     type_flags = (instr_raw >> 48) & 0b1111UL;
+		const char     reg_flags = (instr_raw >> 52) & 0b1111UL;
+		const size_t   nargs = (instr_raw >> 56) & 0xffUL;
 
 		// Load the argument into temp arg registers and do conversions.
 		uint64_t args[4];
-		uint64_t     arg_types[4];
+		uint64_t arg_types[4];
 		for (int i = 0; i < nargs; i++) {
 			uint64_t arg_raw = instr_tbl[instr_idx - 1][i + 1];
 			if (reg_flags & (1 << i)) {
