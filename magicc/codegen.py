@@ -169,7 +169,6 @@ def rules2bytes(rules: list[Rule]) -> bytes:
 
         # Handle arguments.
         argregfl: int = 0
-        argtypfl: int = 0
         for j, arg in enumerate(r.args):
             if arg[0] == TokenType.Integer:
                 args.append(
@@ -181,12 +180,10 @@ def rules2bytes(rules: list[Rule]) -> bytes:
                 args.append(arg[1].to_bytes(8, "little"))
                 if arg[0] == TokenType.Register:
                     argregfl |= 1 << j
-                elif arg[0] == TokenType.String:
-                    argtypfl |= 1 << j
 
         code.append(
             Opcodes[r.instruction][0]
-            + ((argregfl << 4) | argtypfl).to_bytes(1, "little")
+            + argregfl.to_bytes(1, "little")
             + len(r.args).to_bytes(1, "little")
             + b"".join(args)
         )

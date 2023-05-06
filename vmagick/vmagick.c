@@ -323,8 +323,7 @@ main(int argc, char **argv)
 		const uint64_t instr_raw = *instr_tbl[instr_idx - 1];
 		// Decode it.
 		const uint64_t instr = (instr_raw << 16) >> 16;
-		const char     type_flags = (instr_raw >> 48) & 0b1111UL;
-		const char     reg_flags = (instr_raw >> 52) & 0b1111UL;
+		const char     reg_flags = (instr_raw >> 48) & 0xffUL;
 		const size_t   nargs = (instr_raw >> 56) & 0xffUL;
 
 		// Load the argument into temp arg registers and do conversions.
@@ -339,7 +338,7 @@ main(int argc, char **argv)
 				if (!arg_types[i]) {
 					args[i] = GET_INT(args[i]);
 				}
-			} else if (type_flags & (1 << i)) {
+			} else if (NOT_INT(arg_raw)) {
 				// String/empty literal argument.
 				args[i] = (uint64_t)(strlit_tbl + arg_raw);
 				arg_types[i] = 1;

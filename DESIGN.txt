@@ -10,15 +10,13 @@ MACHINE DESIGN, BRIEFLY:
         - 8 bytes for the number of instructions
         - some multiple of 8 bytes for each subsequent opcode, consisting of:
             - 6 bytes for the instruction
-            - two 4-bit bitfields counting from LSB:
+            - one 8-bit bitfield counting from LSB:
                 - register argument flags (set iff the argument is in a register)
-                - type flags (set if the argument is a string/empty)
             - 1 byte for the number of arguments (unsigned)
             - 8 bytes for each subsequent argument
-    - NOTE: for type tags, 1 represents string/empty; if value is 0 then empty;
-      this means that the string table is one-indexed
-    - integers are stored with last bit set to 1; all aligned pointers have LSB 0.
+                - integer literals are stored with last bit set to 1. 
+    - for the stack:
+        - integers are stored with last bit set to 1; all aligned pointers have LSB 0.
 
     - Dynamically-created strings will be refcounted. The structure is the same as
-      that of string literals, but there will be 8 extra bytes after to hold the
-      refcount. REFCOUNT FOR STRING LITERALS SHOULD BE -1.
+      that of string literals. REFCOUNT FOR STRING LITERALS SHOULD BE -1.
